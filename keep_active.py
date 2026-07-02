@@ -18,11 +18,16 @@ rights. It never *requires* you to open System Settings:
     permission. Always launch via run.sh (or the caffeinate line below).
 
 Behavior:
-  * Every CYCLE_SECONDS (default 30s) a "wiggle" burst starts.
-  * During each burst (default ~5s) the cursor moves in a random direction,
-    changing to a new random direction once per second.
-  * Between bursts the cursor is left alone. Movements are small and steer
-    back toward center if they drift, so the pointer never runs off-screen.
+  * The script stays DORMANT while you're using the machine. Any real mouse or
+    keyboard input keeps it out of the way.
+  * Once there's been IDLE_THRESHOLD seconds (default 45s) with no mouse or
+    keyboard activity, it activates and starts wiggling.
+  * While active it runs "wiggle" bursts (~BURST_SECONDS long), moving the
+    cursor in a random direction and changing direction once per second, with a
+    short rest between bursts. Movements are small and steer back toward center
+    if they drift, so the pointer never runs off-screen.
+  * The instant you touch the mouse or keyboard, it senses you're active and
+    goes dormant again, re-activating only after another IDLE_THRESHOLD of quiet.
 
 Stop any time with Ctrl-C.
 
@@ -38,12 +43,25 @@ import time
 import Quartz
 
 # ---- Tunables ---------------------------------------------------------------
-CYCLE_SECONDS = 30      # how often a wiggle burst begins
+IDLE_THRESHOLD = 45     # seconds of no mouse/keyboard input before we activate
 BURST_SECONDS = 5       # how long each burst lasts
+REST_SECONDS = 25       # quiet gap between bursts while you stay idle
 STEP_SECONDS = 1        # how often the direction changes within a burst
 MOVE_PIXELS = 12        # distance moved per direction, in pixels
 MAX_DRIFT = 60          # if cursor is farther than this from start, steer back
 # -----------------------------------------------------------------------------
+
+_IDLE_SRC = Quartz.kCGEventSourceStateHIDSystemState
+_IDLE_ANY = Quartz.kCGAnyInputEventType
+
+
+def idle_seconds():
+    """Seconds since the last real mouse/keyboard event.
+
+    NOTE: our own synthesized events (EVENT mode) also reset this counter, so
+    this is only meaningful when the script isn't currently wiggling — which is
+    exactly when we check it (during the rest/monitor phase)."""
+    return Quartz.CGEventSourceSecondsSinceLastEventType(_IDLE_SRC, _IDLE_ANY)
 
 
 def get_cursor():
@@ -100,11 +118,17 @@ def wiggle_once(move_fn, home_x, home_y):
         time.sleep(STEP_SECONDS)
 
 
+def stamp():
+    return time.strftime("%H:%M:%S")
+
+
 def main():
     move_fn, mode = pick_mover()
     print("keep_active running — Ctrl-C to stop.")
-    print(f"  burst every {CYCLE_SECONDS}s, ~{BURST_SECONDS}s long, "
-          f"new direction every {STEP_SECONDS}s.")
+    print(f"  dormant while you work; activates after {IDLE_THRESHOLD}s with no "
+          f"mouse/keyboard input.")
+    print(f"  once active: ~{BURST_SECONDS}s bursts, new direction every "
+          f"{STEP_SECONDS}s, {REST_SECONDS}s rest between.")
     if mode == "event":
         print("  mode: EVENT — resetting the idle timer, so Teams should stay "
               "green. ✓")
@@ -114,11 +138,37 @@ def main():
         print("        (If you can toggle it: System Settings > Privacy & "
               "Security > Accessibility > add your terminal, then rerun.)")
 
-    idle = max(0, CYCLE_SECONDS - BURST_SECONDS)
+    REST_POLL = 1.0       # how often to check for your return, while active
+    RETURN_TOL = 2.0      # slack (s) so timer jitter isn't mistaken for input
+
+    active = False        # True while we're wiggling
     while True:
+        if not active:
+            # DORMANT: we post nothing, so the idle counter is pure YOUR input.
+            idle = idle_seconds()
+            if idle < IDLE_THRESHOLD:
+                # You're active — stay out of the way. Sleep only until the
+                # soonest moment you could cross the threshold.
+                time.sleep(max(1.0, IDLE_THRESHOLD - idle))
+                continue
+            print(f"[{stamp()}] {int(idle)}s with no input — keeping you active.")
+            active = True
+
+        # ACTIVE: one wiggle burst, then rest while watching for your return.
         home_x, home_y = get_cursor()
         wiggle_once(move_fn, home_x, home_y)
-        time.sleep(idle)
+        last_post = time.time()
+
+        rested = 0.0
+        while rested < REST_SECONDS:
+            time.sleep(min(REST_POLL, REST_SECONDS - rested))
+            rested += REST_POLL
+            # An event NEWER than our own last wiggle can only be you. (Our
+            # wiggles reset the same counter, so we compare against them.)
+            if idle_seconds() < (time.time() - last_post) - RETURN_TOL:
+                print(f"[{stamp()}] input detected — going dormant.")
+                active = False
+                break
 
 
 if __name__ == "__main__":

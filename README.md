@@ -4,7 +4,9 @@ A tiny background script that keeps your Mac "active" so it looks like you're at
 
 ## What it does
 
-Every 30 seconds it gently wiggles your mouse cursor for about 5 seconds, changing direction randomly once a second, then leaves it alone until the next round. The movements are small and self-correcting, so your pointer never drifts off-screen.
+It gently wiggles your mouse cursor for about 5 seconds at a time, changing direction randomly once a second, then rests before the next round. The movements are small and self-correcting, so your pointer never drifts off-screen.
+
+**It stays out of your way while you're working.** As long as you're using the mouse or keyboard, the script stays dormant and does nothing. Only after **45 seconds with no mouse or keyboard activity** does it decide you've stepped away and start keeping the machine active. The moment you touch the mouse or keyboard again, it senses you're back and goes dormant — re-activating only after another 45 seconds of quiet.
 
 This is useful for:
 
