@@ -12,7 +12,7 @@ This is useful for:
 - **Preventing your display and computer from sleeping** — handy for long, unattended runs (e.g. training or downloading overnight).
 - **Staying connected to a VPN** that logs you out after a period of inactivity.
 
-It's built for machines where you can't change the sleep or timeout settings yourself.
+It's built for machines where you can't change the sleep or timeout settings yourself — including **locked-down, managed work laptops with limited admin access**. It needs no admin rights to run.
 
 ## Requirements
 
@@ -34,19 +34,27 @@ It's built for machines where you can't change the sleep or timeout settings you
    python3 -m pip install pyobjc-framework-Quartz
    ```
 
-3. **Grant Accessibility permission**
-
-   macOS blocks apps from moving the mouse unless you allow it. Open **System Settings → Privacy & Security → Accessibility**, click **+**, and add the app you'll run the script from (Terminal, iTerm, or VS Code). Turn its switch **on**, then fully quit and reopen that app.
+That's it — no settings changes required.
 
 ## Running it
 
 ```bash
-caffeinate -dimsu python3 keep_active.py
+./run.sh
 ```
 
 Leave the window open and you're set. Press **Ctrl-C** to stop.
 
-> `caffeinate` is a built-in macOS command that adds an extra layer of "stay awake" on top of the mouse movement.
+## Works on locked-down laptops (no admin needed)
+
+The script is built to do the most it can with whatever your machine allows, and it tells you which mode it's in when it starts:
+
+- **Preventing sleep and staying on the VPN** is handled by `caffeinate`, a built-in macOS tool that needs **no permission and no admin rights**. This always works.
+- **Moving the cursor** always works too — it never runs your pointer off-screen.
+- **Keeping Teams green** ideally uses real mouse events, which *may* require Accessibility permission. When the script starts it self-tests:
+  - If events work, it prints `mode: EVENT` and Teams should stay green.
+  - If they're blocked, it prints `mode: WARP` and keeps moving the cursor / blocking sleep anyway.
+
+If you land in `WARP` mode and *can* reach settings, add your terminal under **System Settings → Privacy & Security → Accessibility**, then rerun — it'll switch to `EVENT` mode automatically. If you can't, the script still keeps your machine awake and on the VPN.
 
 ## Tuning
 
